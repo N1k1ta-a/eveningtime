@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Украду тебя в объятия</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #2b1055, #7597de);
+    color: #fff;
+    overflow: hidden;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .card {
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 24px;
+    padding: 32px 24px;
+    max-width: 480px; width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+    z-index: 2;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+  h1 { font-size: clamp(1.3rem, 5vw, 1.6rem); margin-bottom: 10px; }
+  .sub { opacity: .85; font-size: clamp(.9rem, 3.5vw, .95rem); margin-bottom: 20px; line-height: 1.5; }
+  input[type="text"] {
+    width: 100%; padding: 14px 16px;
+    border: none; border-radius: 14px;
+    font-size: 1rem; margin-bottom: 12px;
+    background: rgba(255,255,255,0.92); color: #2b1055;
+    outline: none;
+    -webkit-appearance: none;
+  }
+  input[type="text"]::placeholder { color: #8a7fb5; }
+  button {
+    display: block; width: 100%;
+    margin: 10px 0; padding: 16px 18px;
+    border: none; border-radius: 14px;
+    background: rgba(255,255,255,0.92); color: #2b1055;
+    font-size: 1rem; font-weight: 600; cursor: pointer;
+    transition: transform .15s, background .2s;
+    touch-action: manipulation;
+  }
+  button:hover { transform: translateY(-2px); background: #fff; }
+  button:active { transform: scale(.97); }
+  .emoji { font-size: clamp(2.5rem, 10vw, 3rem); margin-bottom: 12px; display: block; }
+  .final-msg { font-size: clamp(.95rem, 4vw, 1.05rem); line-height: 1.6; margin: 16px 0 22px; }
+  .heart { animation: pulse 1.2s infinite; display: inline-block; }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.25)} }
+  .hint { font-size: .8rem; opacity: .6; margin-top: 14px; }
+
+  /* ===== Мини-игра ===== */
+  #gameArea {
+    position: fixed; inset: 0;
+    display: none; z-index: 1;
+    touch-action: manipulation;
+  }
+  .falling-heart {
+    position: absolute;
+    font-size: clamp(2.2rem, 9vw, 2.8rem);
+    cursor: pointer; user-select: none;
+    -webkit-user-select: none;
+    padding: 10px;
+    line-height: 1;
+    will-change: transform;
+    touch-action: manipulation;
+  }
+  .falling-heart:active { transform: scale(1.3); }
+  .scoreboard {
+    position: fixed; top: 12px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.45); color: #fff;
+    padding: 10px 20px; border-radius: 20px;
+    font-weight: 700; z-index: 3;
+    font-size: clamp(.85rem, 3.5vw, 1rem);
+    white-space: nowrap;
+  }
+  #gameCard {
+    position: fixed; z-index: 4;
+    left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: none;
+    max-height: 92vh; overflow-y: auto;
+  }
+  @keyframes fall {
+    from { transform: translateY(-60px) rotate(0deg); }
+    to { transform: translateY(105vh) rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <span class="emoji" id="emoji">🧸</span>
+  <h1 id="title">Привет, родная</h1>
+  <p class="sub" id="sub">У меня к тебе один очень важный вопрос 😊</p>
+  <div id="answers"></div>
+  <p class="hint" id="hint"></p>
+</div>
+
+<div id="gameArea"></div>
+<div class="scoreboard" id="scoreboard" style="display:none">Поймано: 0 / 10 ❤️</div>
+<div class="card" id="gameCard"></div>
+
+<script>
+let eveningChoice = "";
+let eveningDetails = "";
+
+/* ---------- ЭТАП 1 ---------- */
+const askHug = {
+  emoji: "🧸",
+  title: "Можно я украду тебя в объятия?",
+  sub: "Прямо сейчас. Официально. Без возможности отказаться 😄",
+  answers: [
+    { text: "Да", reply: "ДА! Ты официально украдена 🏃❤️" },
+    { text: "Да, конечно", reply: "ДА! Уже иду 🏃❤️" },
+    { text: "Давай уже", reply: "ДА! Не пришлось долго уговаривать 😄" }
+  ]
+};
+
+function renderStep(step, onDone) {
+  document.getElementById('card').style.display = 'block';
+  document.getElementById('emoji').textContent = step.emoji;
+  document.getElementById('title').textContent = step.title;
+  document.getElementById('sub').textContent = step.sub;
+  const answersDiv = document.getElementById('answers');
+  answersDiv.innerHTML = '';
+  document.getElementById('hint').textContent = '';
+
+  step.answers.forEach(a => {
+    const btn = document.createElement('button');
+    btn.textContent = a.text;
+    btn.onclick = () => {
+      document.getElementById('sub').textContent = a.reply;
+      answersDiv.innerHTML = '';
+      setTimeout(onDone, 1100);
+    };
+    answersDiv.appendChild(btn);
+  });
+}
+
+/* ---------- ЭТАП 2 ---------- */
+function askEvening() {
+  const card = document.getElementById('card');
+  card.style.display = 'block';
+  document.getElementById('emoji').textContent = "🌙";
+  document.getElementById('title').textContent = "Отлично. Ты в объятиях.";
+  document.getElementById('sub').textContent = "Теперь расскажи сама: как проведём вечер?";
+  document.getElementById('hint').textContent = "Пиши что угодно — я всё исполню (в пределах разумного 😄)";
+
+  const answersDiv = document.getElementById('answers');
+  answersDiv.innerHTML = '';
+
+  const input1 = document.createElement('input');
+  input1.type = 'text';
+  input1.placeholder = 'Например: пицца и сериал...';
+  input1.id = 'eveningInput';
+  answersDiv.appendChild(input1);
+
+  const input2 = document.createElement('input');
+  input2.type = 'text';
+  input2.placeholder = 'А что именно? (сериал, еда, музыка...)';
+  input2.id = 'detailsInput';
+  answersDiv.appendChild(input2);
+
+  const btn = document.createElement('button');
+  btn.textContent = "Записать мой идеальный вечер";
+  btn.onclick = () => {
+    eveningChoice = input1.value.trim() || "что-то уютное";
+    eveningDetails = input2.value.trim() || "на твой вкус";
+    document.getElementById('sub').textContent =
+      `Записано: «${eveningChoice}». Звучит идеально ❤️`;
+    answersDiv.innerHTML = '';
+    setTimeout(startGame, 1300);
+  };
+  answersDiv.appendChild(btn);
+}
+
+/* ---------- ЭТАП 3: Игра ---------- */
+const TARGET = 10;
+let caught = 0;
+let spawnInterval;
+let timeoutId;
+let activeHearts = new Set();
+
+function startGame() {
+  document.getElementById('card').style.display = 'none';
+  document.getElementById('gameArea').style.display = 'block';
+  document.getElementById('scoreboard').style.display = 'block';
+  caught = 0;
+  activeHearts.clear();
+  updateScore();
+
+  spawnInterval = setInterval(spawnHeart, 900);
+  spawnHeart();
+
+  timeoutId = setTimeout(() => {
+    if (caught < TARGET) finishGame(false);
+  }, 30000);
+}
+
+function updateScore() {
+  document.getElementById('scoreboard').textContent =
+    `Поймано: ${caught} / ${TARGET} ❤️`;
+}
+
+function spawnHeart() {
+  if (activeHearts.size >= 8) return;
+
+  const area = document.getElementById('gameArea');
+  const heart = document.createElement('div');
+  heart.className = 'falling-heart';
+  heart.textContent = ['❤️','💖','💗','💕','🧸'][Math.floor(Math.random()*5)];
+
+  const size = 44;
+  const x = Math.random() * Math.max(10, window.innerWidth - size - 20);
+  heart.style.left = x + 'px';
+  heart.style.top = '-60px';
+
+  const duration = 4.5 + Math.random() * 1.5;
+  heart.style.animation = `fall ${duration}s linear forwards`;
+
+  let caughtThis = false;
+  const catchHeart = (e) => {
+    if (caughtThis) return;
+    caughtThis = true;
+    e.preventDefault();
+    caught++;
+    updateScore();
+    activeHearts.delete(heart);
+    heart.remove();
+    if (caught >= TARGET) finishGame(true);
+  };
+
+  heart.addEventListener('click', catchHeart);
+  heart.addEventListener('touchstart', catchHeart, { passive: false });
+
+  activeHearts.add(heart);
+  area.appendChild(heart);
+
+  setTimeout(() => {
+    if (heart.parentNode) {
+      activeHearts.delete(heart);
+      heart.remove();
+    }
+  }, duration * 1000 + 100);
+}
+
+function finishGame(win) {
+  clearInterval(spawnInterval);
+  clearTimeout(timeoutId);
+  activeHearts.clear();
+  document.getElementById('gameArea').innerHTML = '';
+  document.getElementById('gameArea').style.display = 'none';
+  document.getElementById('scoreboard').style.display = 'none';
+
+  const gameCard = document.getElementById('gameCard');
+  gameCard.style.display = 'block';
+
+  if (win) {
+    gameCard.innerHTML = `
+      <span class="emoji">🎉</span>
+      <h1>Ты собрала ${TARGET} объятий!</h1>
+      <p class="final-msg">
+        Официально заслужено. Теперь можно ничего не делать.<br><br>
+        Ты справилась с этим днём. Я горжусь тобой. <span class="heart">❤️</span>
+      </p>
+      <button onclick="finalScreen()">А что дальше?</button>
+      <p class="hint">Спойлер: я уже рядом.</p>
+    `;
+  } else {
+    gameCard.innerHTML = `
+      <span class="emoji">😅</span>
+      <h1>Почти!</h1>
+      <p class="final-msg">
+        Ты поймала ${caught} из ${TARGET}. Но это неважно —<br>
+        объятия всё равно твои. Все ${TARGET}, и даже больше.
+      </p>
+      <button onclick="finalScreen()">А что дальше?</button>
+    `;
+  }
+}
+
+/* ---------- ФИНАЛ ---------- */
+function finalScreen() {
+  const gameCard = document.getElementById('gameCard');
+
+  const message =
+    `Привет! Я прошла квиз 🧸\n` +
+    `Меня украли в объятия ❤️\n\n` +
+    `Мой идеальный вечер: «${eveningChoice}»\n` +
+    `Детали: ${eveningDetails}\n\n` +
+    `План: ложусь, ты рядом, обнимаешь, мир подождёт 🌙`;
+
+  gameCard.innerHTML = `
+    <span class="emoji">🌙</span>
+    <h1>Твой вечер готов</h1>
+    <p class="final-msg">
+      Ты выбрала: <b>«${eveningChoice}»</b>.<br>
+      Детали: <i>${eveningDetails}</i>.<br><br>
+      План:<br>
+      1. Ты ложишься.<br>
+      2. Я ложусь рядом.<br>
+      3. Обнимаю.<br>
+      4. Мир подождёт.
+    </p>
+
+    <div id="copyBox" style="
+      background: rgba(0,0,0,0.25);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin: 0 0 16px;
+      text-align: left;
+      font-size: .9rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    ">${message}</div>
+
+    <button onclick="copyMessage()">📋 Скопировать и отправить</button>
+    <button onclick="alert('Обнимаю крепко! 🤗')">Обнять меня</button>
+    <p class="hint" id="copyHint">Нажми «Скопировать» — и вставь сообщение мне в чат ❤️</p>
+  `;
+}
+
+/* ---------- Копирование сообщения ---------- */
+function copyMessage() {
+  const text = `Привет! Я прошла квиз 🧸
+Меня украли в объятия ❤️
+
+Мой идеальный вечер: «${eveningChoice}»
+Детали: ${eveningDetails}
+
+План: ложусь, ты рядом, обнимаешь, мир подождёт 🌙`;
+
+  const hint = document.getElementById('copyHint');
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => {
+      hint.textContent = "Скопировано! Теперь вставь в чат и отправь мне ❤️";
+      hint.style.opacity = "1";
+    }).catch(() => fallbackCopy(text, hint));
+  } else {
+    fallbackCopy(text, hint);
+  }
+}
+
+/* ---------- Фолбэк для старых браузеров ---------- */
+function fallbackCopy(text, hint) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  ta.style.top = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  ta.setSelectionRange(0, ta.value.length);
+
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch (e) {
+    ok = false;
+  }
+  document.body.removeChild(ta);
+
+  if (ok) {
+    hint.textContent = "Скопировано! Теперь вставь в чат и отправь мне ❤️";
+  } else {
+    hint.textContent = "Не удалось скопировать автоматически — выдели текст выше и скопируй вручную.";
+  }
+  hint.style.opacity = "1";
+}
+
+/* ---------- Запуск ---------- */
+renderStep(askHug, askEvening);
+</script>
+</body>
+</html>
